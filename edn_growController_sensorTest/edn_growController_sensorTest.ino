@@ -1,18 +1,6 @@
-
-#include <Bridge.h>
-#include <Temboo.h>
-#include <Process.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-#include <Time.h>
-#include <TimeAlarms.h>
 #include "DHT.h"
-#include "TembooAccount.h" // contains Temboo account information
-#include "googleAccount.h" // containes Google account information
-
-// Light and water pump pins
-#define WATERPUMP 7
-#define LED 8
 
 // temperature & humidity sensor pin
 #define DHTPIN 4 
@@ -31,7 +19,6 @@
 #define ONE_WIRE_BUS 2
 
 // Variables
-unsigned long time;
 int lightLevel;
 float humidity;
 float temperatureC;
@@ -54,9 +41,6 @@ DallasTemperature sensors(&oneWire);
 
 // Water temperature sensor - arrays to hold device address
 DeviceAddress insideThermometer;
-
-// Process to get the time measurement
-Process date;
     
 // Temperature & Humidity sensor - Initialize DHT sensor for normal 16mhz Arduino
 DHT dht(DHTPIN, DHT11);
@@ -79,30 +63,19 @@ void setup(void)
   // set the resolution to 9 bit (Each Dallas/Maxim device is capable of several different resolutions)
   sensors.setResolution(insideThermometer, 9);
   
-  // Start bridge
-  Bridge.begin();
-  
-    // Start date process
-  time = millis();
-  if (!date.running())  {
-    date.begin("date");
-    date.addParameter("+%D-%T");
-    date.run();
-  }
-
 }
   
 void loop(void)
 {
 
-  runAppendRow(); 
+  checkSensors();  
   
-  // Wait 15 seconds
-  delay(15000);
+  // Wait 2 seconds
+  delay(5000);
   
 }
 
-String checkSensors() {
+void checkSensors() {
   
   // Measure light level
   lightLevel = analogRead(A0);
@@ -118,18 +91,48 @@ String checkSensors() {
   // CO2 sensor readings
   volts = MGRead(MG_PIN);
   CO2percentage = MGGetPercentage(volts,CO2Curve);
-  if (CO2percentage == -1) {
-    CO2percentage = 400;
-  }
 
   // Water temperature sensor reading
   sensors.requestTemperatures(); // Send the command to get temperatures
   waterTempC = sensors.getTempC(insideThermometer);
   waterTempF = DallasTemperature::toFahrenheit(waterTempC);
     
-  String dataString = String(lightLevel) + "," + String(humidity) + "," + String(temperatureC) + "," + String(temperatureF) + "," + String(CO2percentage) + "," + String(waterTempC) + "," + String(waterTempF);
+  // Print light measurement
+  Serial.print("Light level: ");
+  Serial.println(lightLevel);
   
-  return dataString;
+  // Print temperature and humidity measurements
+  Serial.print("Humidity: "); 
+  Serial.print(humidity);
+  Serial.print(" %\t");
+  Serial.print("Temperature: "); 
+  Serial.print(temperatureC);
+  Serial.print(" *C ");
+  Serial.print(temperatureF);
+  
+  // Print CO2 measurements
+  Serial.print(" *F\n");
+  Serial.print( "SEN-00007:" );
+  Serial.print(volts); 
+  Serial.print( "V           " );
+  Serial.print("CO2:");
+  if (CO2percentage == -1) {
+      Serial.print( "<400" );
+  } else {
+      Serial.print(CO2percentage);
+  }
+  Serial.print( "ppm" );  
+  Serial.print( "       Time point:" );
+  Serial.print(millis());
+  Serial.print("\n");
+  
+  // Print water temperature measurements
+    Serial.print("Water Temperature *C: ");
+  Serial.print(waterTempC);
+  Serial.print("\t Water Temperature *F: ");
+  Serial.print(waterTempF);
+  
+  Serial.print("\n\n");
 }
 
 /*****************************  MGRead *********************************************
@@ -168,67 +171,3 @@ int  MGGetPercentage(float volts, float *pcurve)
    }
 }
 
-void runAppendRow() {
-  
-  String sensorValues = checkSensors();
-  
-  // we need a Process object to send a Choreo request to Temboo
-  TembooChoreo AppendRowChoreo;
-  
-  // invoke the Temboo client
-  // NOTE that the client must be reinvoked and repopulated with
-  // appropriate arguments each time its run() method is called.
-  AppendRowChoreo.begin();
-  
-  // set Temboo account credentials
-  AppendRowChoreo.setAccountName(TEMBOO_ACCOUNT);
-  AppendRowChoreo.setAppKeyName(TEMBOO_APP_KEY_NAME);
-  AppendRowChoreo.setAppKey(TEMBOO_APP_KEY);
-  
-  // identify the Temboo Library choreo to run (Google > Spreadsheets > AppendRow)
-  AppendRowChoreo.setChoreo("/Library/Google/Spreadsheets/AppendRow");
-  
-  // your Google username (usually your email address)
-  AppendRowChoreo.addInput("Username", GOOGLE_USERNAME);
-  
-  // your Google account password
-  AppendRowChoreo.addInput("Password", GOOGLE_PASSWORD);  
-  
-  // the title of the spreadsheet you want to append to
-  AppendRowChoreo.addInput("SpreadsheetTitle", SPREADSHEET_TITLE);  
-  
-  // Restart the date process:
-  if (!date.running())  {
-    date.begin("date");
-    date.addParameter("+%D-%T");
-    date.run();
-  }  
-
-  // convert the time and sensor values to a comma separated string
-  String timeString = date.readString();
-  Serial.print(timeString);
-  String rowData = "";
-  rowData = rowData + timeString + "," + sensorValues;
-
-  // add the RowData input item
-  AppendRowChoreo.addInput("RowData", rowData); 
-  
-  // run the Choreo and wait for the results
-  // The return code (returnCode) will indicate success or failure
-  unsigned int returnCode = AppendRowChoreo.run();  
-  
-  // return code of zero (0) means success
-  if (returnCode == 0) {
-    Serial.println("Success! Appended " + rowData);
-    Serial.println("");
-  } else {
-    // return code of anything other than zero means failure
-    // read and display any error messages
-    while (AppendRowChoreo.available()) {
-      char c = AppendRowChoreo.read();
-      Serial.print(c);
-    }
-  }
-
-  AppendRowChoreo.close(); 
-}

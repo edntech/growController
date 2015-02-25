@@ -9,4 +9,5 @@
 // that exists in your Google Drive/Docs account, and is configured
 // as described above.)
 
-#define SPREADSHEET_TITLE "SpreadsheetTitle"
+#define SPREADSHEET_TITLE "GrowData" // the title of your Google Spreadsheet
+
