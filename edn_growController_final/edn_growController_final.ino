@@ -77,22 +77,22 @@ DHT dht(DHTPIN, DHT11);
 void setup(void) {
   // Init serial
   Serial.begin(9600);
+ 
+  // Start bridge
+  Bridge.begin();
   
-  // Configure the temperature and humidity pin
-  dht.begin();
-  
-  // Configure CO2 pins
-  pinMode(BOOL_PIN, INPUT); //set pin to input
-  digitalWrite(BOOL_PIN, HIGH); //turn on pullup resistors
+  // Configure pins
+  pinMode(WATERPUMP, OUTPUT); // configure water pump pin
+  pinMode(LED, OUTPUT); // configure LED pin
+  dht.begin(); // configure the temperature and humitidy sensor pin
+  pinMode(BOOL_PIN, INPUT); // configure the CO2 pin
+  digitalWrite(BOOL_PIN, HIGH); // turn on pullup resistors (CO2 sensor requirement) 
   
   // Water temperature sensor - locate devices on the bus
   sensors.begin();
   if (!sensors.getAddress(insideThermometer, 0)) Serial.println("Unable to find address for Device 0"); 
   // set the resolution to 9 bit (Each Dallas/Maxim device is capable of several different resolutions)
   sensors.setResolution(insideThermometer, 9);
-  
-  // Start bridge
-  Bridge.begin();
   
     // Start date process
   time = millis();
@@ -102,18 +102,18 @@ void setup(void) {
     date.run();
   }
   
-  // Check whether to use a vegatative or flowering lighting schedule
-  if(growthStage == "flower") {
-    night = 18;
-  } else if (growthStage == "veg") {
-    night = 0;
-  }
-  
   // Check the time using the local wifi network that your Yun is connected to
   checkTime();
   
   // Set the time
   setTime(hours,minutes,seconds, 1,1,11);
+  
+  // Check whether to use a vegatative or flowering lighting schedule
+  if (growthStage == "flower") {
+    night = 18;
+  } else if (growthStage == "veg") {
+    night = 0;
+  }
   
   // Set timers and alarms
   Alarm.timerRepeat(10800,runAppendRow); // check sensors every 3 hours and send data to the google doc
@@ -122,6 +122,23 @@ void setup(void) {
   Alarm.alarmRepeat(6,0,0, light_on); // turn the lights on at 6am
   Alarm.alarmRepeat(night,0,0, light_off); // turn the lights off
   Alarm.timerRepeat(600, waterPlant); // (Frequency, Function)
+  
+  // Set water pump to LOW (off) 
+  digitalWrite(WATERPUMP, LOW);
+  // Set the LED to either LOW (off) or HIGH (on) depending on the current time and on the growth stage
+  if (growthStage == "flower") {
+    if (hours > 5 && hours < 18) {
+      digitalWrite(LED, HIGH);
+    } else {
+      digitalWrite(LED, LOW);
+    }
+  } else if (growthStage == "veg") {
+    if (hours > 5) {
+      digitalWrite(LED, HIGH);
+    } else {
+      digitalWrite(LED, LOW);
+    }
+  } 
   
   waterPlant();
   runAppendRow();
